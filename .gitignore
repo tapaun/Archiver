@@ -51,3 +51,9 @@ artifacts/
 
 # Cleanup scripts
 cleanup-commands.sh
+
+# Local filter file (do not commit - contains replacements/slurs)
+filters.json
+# also ignore any per-project copies
+**/filters.json
+TheArchiver/filters.json
