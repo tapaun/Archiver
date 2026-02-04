@@ -6,7 +6,8 @@
         <LangVersion>14</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-    </PropertyGroup>
+      <UserSecretsId>cd05446b-16e8-4dbe-83d7-55ecb0216bb0</UserSecretsId>
+  </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Discord.Addons.Hosting" Version="6.1.0" />
@@ -15,11 +16,17 @@
       <PackageReference Include="Discord.Net.Core" Version="3.18.0" />
       <PackageReference Include="Discord.Net.Interactions" Version="3.18.0" />
       <PackageReference Include="Discord.Net.WebSocket" Version="3.18.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.2" />
       <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.2" />
     </ItemGroup>
 
     <ItemGroup>
-      <None Include="bin\Debug\net10.0\appsettings.json" />
+      <None Update="filters.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="archiving.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

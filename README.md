@@ -6,46 +6,116 @@ A Discord bot for archiving messages and filtering inappropriate content.
 
 - **Message Filtering**: Automatically filters and replaces inappropriate keywords in messages
 - **Dynamic Filter Management**: Add and remove filter words at runtime via slash commands
-- **Message Archiving**: Archive and retrieve Discord messages
-- **User Statistics**: Track user activity and message counts
+- **Channel Archiving**: Automatically archive channels every 24 hours
+- **Category Management**: Configure archive categories per server
+- **Server Information**: Get detailed server and user information
 
 ## Setup
 
-1. Clone the repository
-2. Copy `TheArchiver/appsettings.template.json` to `TheArchiver/appsettings.json`
-3. Edit `appsettings.json` and add your Discord bot token and guild ID
-4. Add your filter words and replacements to the `SlurIndexPairs` section
-5. Build and run the project
+### Prerequisites
+- .NET 10.0 SDK
+- A Discord bot token from [Discord Developer Portal](https://discord.com/developers/applications)
 
+### Installation
+
+1. Clone the repository
+```bash
+git clone <repository-url>
+cd TheArchiver
+```
+
+2. Set up your bot token using user secrets (secure):
+```bash
+cd TheArchiver
+dotnet user-secrets set "BotToken" "YOUR_DISCORD_BOT_TOKEN_HERE"
+```
+
+3. (Optional) Customize filters by editing `TheArchiver/filters.json`:
+```json
+{
+  "badword": "replacement",
+  "anotherbadword": "substitute"
+}
+```
+
+4. Build and run:
 ```bash
 dotnet build
-dotnet run --project TheArchiver
+dotnet run
 ```
 
 ## Configuration
 
-Edit `appsettings.json` (not tracked in git):
+### Bot Token (Secure)
+The bot token is stored in **user secrets** (not in files). Set it using:
+```bash
+dotnet user-secrets set "BotToken" "YOUR_TOKEN"
+```
 
+### Filter Words
+Edit `TheArchiver/filters.json` to add/remove filter words:
 ```json
 {
-  "Startup": {
-    "Token": "YOUR_DISCORD_BOT_TOKEN",
-    "DevGuildId": YOUR_GUILD_ID
-  },
-  "FilterOptions": {
-    "SlurIndexPairs": {
-      "badword": "replacement"
-    }
-  }
+  "word1": "replacement1",
+  "word2": "replacement2"
 }
 ```
 
+Filters can also be managed at runtime using slash commands (see below).
+
+### Archiving Configuration
+The bot automatically manages `archiving.json` to store server archiving configurations. No manual editing needed.
+
 ## Slash Commands
 
-- `/add-filter` - Add a word to filter (Admin only)
-- `/remove-filter` - Remove a filtered word (Admin only)
+### Filter Management (Admin Only)
+- `/add-filter` - Add a word to filter with its replacement
+- `/remove-filter` - Remove a filtered word
 
-## Security Note
+### Archiving Management
+- `/set-archive-category` - Configure the category where archived channels are moved
+- `/set-archive-channel` - Set up a channel for automatic archiving
 
-**Never commit `appsettings.json` to version control.** It contains sensitive data like your Discord bot token and filter configurations.
+### Information
+- `/get-server-info` - Get detailed information about the server
+- `/get-user-info` - Get detailed information about a user
+- `/purge` - Purge messages from a channel
 
+## Project Structure
+
+```
+TheArchiver/
+├── filters.json              # Word filters and replacements
+├── archiving.json           # Server archiving configurations (auto-managed)
+├── archive_state.json       # Channel archiving state (auto-managed)
+├── src/
+│   ├── Program.cs           # Application entry point
+│   ├── Discord/             # Discord client and handlers
+│   ├── Services/            # Business logic services
+│   └── ...
+└── TheArchiver.csproj
+```
+
+## Development
+
+The bot uses:
+- **Discord.Net** for Discord API interactions
+- **Microsoft.Extensions.Hosting** for service management
+- **User Secrets** for secure configuration
+- **Structured logging** with ILogger
+
+## Security Notes
+
+- ✅ Bot token is stored in **user secrets** (not in files)
+- ✅ `filters.json` is tracked in git (customize as needed)
+- ✅ `archiving.json` and `archive_state.json` are auto-generated
+- ⚠️ Never commit sensitive tokens or credentials to version control
+
+## Documentation
+
+- [CONFIGURATION.md](CONFIGURATION.md) - Detailed configuration guide
+- [SETUP.md](SETUP.md) - Quick setup instructions
+
+## License
+
+[Add your license here]

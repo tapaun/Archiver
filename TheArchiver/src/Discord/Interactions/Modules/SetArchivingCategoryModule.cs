@@ -22,11 +22,11 @@ public class SetArchivingCategoryModule(CategoryArchivingService categoryArchivi
             ICategoryChannel category;
             if (Context.Guild.CategoryChannels.Any(c => c.Name == categoryName)) {
                 category = Context.Guild.CategoryChannels.First(c => c.Name == categoryName);
-                categoryArchivingService.SetArchivedCategory(Context.Guild.Id, category.Id);
+                await categoryArchivingService.SetArchivedCategoryAsync(Context.Guild.Id, category.Id);
             }
             else {
                 category = await Context.Guild.CreateCategoryChannelAsync(categoryName);
-                categoryArchivingService.SetArchivedCategory(Context.Guild.Id, category.Id);
+                await categoryArchivingService.SetArchivedCategoryAsync(Context.Guild.Id, category.Id);
             }
         
             await SubscribeRoleToCategory(roleName, category);

@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
-using TheArchiver.Common.Options;
+using Microsoft.Extensions.Logging;
 using TheArchiver.Services.Embedding;
 
 namespace TheArchiver.Services.Filtering;
@@ -9,53 +8,74 @@ namespace TheArchiver.Services.Filtering;
 /// <summary>
 /// Filters messages for inappropriate keywords using regex pattern matching
 /// </summary>
-public class KeywordMessageFilter(IOptions<FilterOptions> options, UserEmbedBuilder embedBuilder) {
-    private readonly UserEmbedBuilder _embedBuilder = embedBuilder;
-    private readonly string _appSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-    private readonly Dictionary<Regex, string> _patterns = options.Value.SlurIndexPairs.ToDictionary(
-        kvp => {
-            var letters = kvp.Key.Select(c => {
-                string escaped = Regex.Escape(c.ToString());
-                string sub = c switch {
-                    'i' => "[i1!]+",
-                    'a' => "[a@4]+",
-                    'e' => "[e3]+",
-                    'o' => "[o0]+",
-                    _ => escaped + "+"
-                };
-                return sub + "[^a-zA-Z0-9]*";
-            });
-            string pattern = @"\b" + string.Join("", letters) + @"\b";
-            return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        },
-        kvp => kvp.Value
-    );
-    
-    // Track original words to their regex patterns for removal
-    private readonly Dictionary<string, Regex> _wordToPattern = options.Value.SlurIndexPairs.ToDictionary(
-        kvp => kvp.Key.ToLower(),
-        kvp => {
-            var letters = kvp.Key.Select(c => {
-                string escaped = Regex.Escape(c.ToString());
-                string sub = c switch {
-                    'i' => "[i1!]+",
-                    'a' => "[a@4]+",
-                    'e' => "[e3]+",
-                    'o' => "[o0]+",
-                    _ => escaped + "+"
-                };
-                return sub + "[^a-zA-Z0-9]*";
-            });
-            string pattern = @"\b" + string.Join("", letters) + @"\b";
-            return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+public class KeywordMessageFilter {
+    private readonly UserEmbedBuilder _embedBuilder;
+    private readonly ILogger<KeywordMessageFilter> _logger;
+    private readonly string _filtersPath;
+    private readonly Dictionary<Regex, string> _patterns = [];
+    private readonly Dictionary<string, Regex> _wordToPattern = [];
+
+    public KeywordMessageFilter(UserEmbedBuilder embedBuilder, ILogger<KeywordMessageFilter> logger) {
+        _embedBuilder = embedBuilder;
+        _logger = logger;
+        
+        var baseDir = AppContext.BaseDirectory;
+        var projectPath = Path.Combine(baseDir, "..", "..", "..", "filters.json");
+        
+        if (File.Exists(Path.GetFullPath(projectPath))) {
+            _filtersPath = Path.GetFullPath(projectPath);
+        } else {
+            _filtersPath = Path.Combine(baseDir, "filters.json");
         }
-    );
+        
+        _logger.LogInformation("Using filters path: {FiltersPath}", _filtersPath);
+    }
+
+    /// <summary>
+    /// Loads filters from filters.json file
+    /// </summary>
+    public async Task LoadFiltersAsync() {
+        if (!File.Exists(_filtersPath)) {
+            _logger.LogWarning("Filters file not found at {FiltersPath}", _filtersPath);
+            return;
+        }
+
+        var json = await File.ReadAllTextAsync(_filtersPath);
+        var filters = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+        
+        if (filters == null) return;
+
+        foreach (var kvp in filters) {
+            AddFilterToRuntime(kvp.Key, kvp.Value);
+        }
+        
+        _logger.LogInformation("Loaded {Count} filters from {FiltersPath}", filters.Count, _filtersPath);
+    }
+
+    private void AddFilterToRuntime(string word, string replacement) {
+        var letters = word.Select(c => {
+            string escaped = Regex.Escape(c.ToString());
+            string sub = c switch {
+                'i' => "[i1!]+",
+                'a' => "[a@4]+",
+                'e' => "[e3]+",
+                'o' => "[o0]+",
+                _ => escaped + "+"
+            };
+            return sub + "[^a-zA-Z0-9]*";
+        });
+        string pattern = @"\b" + string.Join("", letters) + @"\b";
+        var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        
+        _patterns[regex] = replacement;
+        _wordToPattern[word.ToLower()] = regex;
+    }
 
     /// <summary>
     /// Checks if a message contains filtered keywords and returns a replacement embed
     /// </summary>
     public Task<Embed?> ContainsKeywordAsync(SocketMessage message) {
-        if(message.Author.IsBot == true)
+        if(message.Author.IsBot)
             return Task.FromResult<Embed?>(null);
         try {
             var content = message.Content;
@@ -76,114 +96,71 @@ public class KeywordMessageFilter(IOptions<FilterOptions> options, UserEmbedBuil
     }
 
     /// <summary>
-    /// Adds a new filter word and its replacement at runtime and saves to appsettings.json
+    /// Adds a new filter word and its replacement at runtime and saves to filters.json
     /// </summary>
-    public void AddFilterWord(string word, string replacement) {
-        var letters = word.Select(c => {
-            string escaped = Regex.Escape(c.ToString());
-            string sub = c switch {
-                'i' => "[i1!]+",
-                'a' => "[a@4]+",
-                'e' => "[e3]+",
-                'o' => "[o0]+",
-                _ => escaped + "+"
-            };
-            return sub + "[^a-zA-Z0-9]*";
-        });
-        string pattern = @"\b" + string.Join("", letters) + @"\b";
-        var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        
-        _patterns[regex] = replacement;
-        _wordToPattern[word.ToLower()] = regex;
-        SaveToAppSettings(word, replacement);
+    public async Task AddFilterWordAsync(string word, string replacement) {
+        AddFilterToRuntime(word, replacement);
+        await SaveFiltersAsync(word, replacement);
     }
     
-    public void RemoveFilteredWord(string word) {
+    /// <summary>
+    /// Removes a filter word from runtime and filters.json
+    /// </summary>
+    public async Task RemoveFilteredWordAsync(string word) {
         var lowerWord = word.ToLower();
+        _logger.LogDebug("Attempting to remove: '{Word}'", lowerWord);
+        _logger.LogDebug("Available words: {Words}", string.Join(", ", _wordToPattern.Keys));
+    
         if (_wordToPattern.TryGetValue(lowerWord, out var regex)) {
             _patterns.Remove(regex);
             _wordToPattern.Remove(lowerWord);
-            RemoveFromAppSettings(word);
+            _logger.LogInformation("Removed '{Word}' from runtime filters", lowerWord);
+            await RemoveFromFiltersAsync(word);
         } else {
             throw new KeyNotFoundException($"Word '{word}' not found in filter list.");
         }
     }
 
     /// <summary>
-    /// Saves the new filter word to appsettings.json
+    /// Saves the new filter word to filters.json
     /// </summary>
-    private void SaveToAppSettings(string word, string replacement) {
+    private async Task SaveFiltersAsync(string word, string replacement) {
         try {
-            var json = File.ReadAllText(_appSettingsPath);
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            var options = new Dictionary<string, object?>();
+            var json = await File.ReadAllTextAsync(_filtersPath);
+            var filters = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new();
             
-            foreach (var property in root.EnumerateObject()) {
-                if (property.Name == "FilterOptions") {
-                    var filterOptions = new Dictionary<string, object?>();
-                    foreach (var filterProp in property.Value.EnumerateObject()) {
-                        if (filterProp.Name == "SlurIndexPairs") {
-                            var slurPairs = new Dictionary<string, string>();
-                            foreach (var slur in filterProp.Value.EnumerateObject()) {
-                                slurPairs[slur.Name] = slur.Value.GetString() ?? "";
-                            }
-                            slurPairs[word] = replacement;
-                            filterOptions["SlurIndexPairs"] = slurPairs;
-                        } else {
-                            filterOptions[filterProp.Name] = JsonSerializer.Deserialize<object>(filterProp.Value.GetRawText());
-                        }
-                    }
-                    options["FilterOptions"] = filterOptions;
-                } else {
-                    options[property.Name] = JsonSerializer.Deserialize<object>(property.Value.GetRawText());
-                }
-            }
-
-            var updatedJson = JsonSerializer.Serialize(options, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_appSettingsPath, updatedJson);
+            filters[word] = replacement;
+            
+            var updatedJson = JsonSerializer.Serialize(filters, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(_filtersPath, updatedJson);
+            _logger.LogInformation("Saved filter '{Word}' to {FiltersPath}", word, _filtersPath);
         }
         catch (Exception ex) {
-            Console.WriteLine($"Error saving to appsettings.json: {ex.Message}");
+            _logger.LogError(ex, "Error saving to filters.json");
             throw;
         }
     }
-    private void RemoveFromAppSettings(string word) {
+    
+    /// <summary>
+    /// Removes a filter word from filters.json
+    /// </summary>
+    private async Task RemoveFromFiltersAsync(string word) {
         try {
-            var json = File.ReadAllText(_appSettingsPath);
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+            var json = await File.ReadAllTextAsync(_filtersPath);
+            var filters = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new();
+            var lowerWord = word.ToLower();
 
-            var options = new Dictionary<string, object?>();
-            
-            foreach (var property in root.EnumerateObject()) {
-                if (property.Name == "FilterOptions") {
-                    var filterOptions = new Dictionary<string, object?>();
-                    foreach (var filterProp in property.Value.EnumerateObject()) {
-                        if (filterProp.Name == "SlurIndexPairs") {
-                            var slurPairs = new Dictionary<string, string>();
-                            foreach (var slur in filterProp.Value.EnumerateObject()) {
-                                if (slur.Name != word) {
-                                    slurPairs[slur.Name] = slur.Value.GetString() ?? "";
-                                }
-                            }
-                            filterOptions["SlurIndexPairs"] = slurPairs;
-                        } else {
-                            filterOptions[filterProp.Name] = JsonSerializer.Deserialize<object>(filterProp.Value.GetRawText());
-                        }
-                    }
-                    options["FilterOptions"] = filterOptions;
-                } else {
-                    options[property.Name] = JsonSerializer.Deserialize<object>(property.Value.GetRawText());
-                }
+            var keyToRemove = filters.Keys.FirstOrDefault(k => k.Equals(lowerWord, StringComparison.OrdinalIgnoreCase));
+            if (keyToRemove != null) {
+                filters.Remove(keyToRemove);
             }
 
-            var updatedJson = JsonSerializer.Serialize(options, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_appSettingsPath, updatedJson);
+            var updatedJson = JsonSerializer.Serialize(filters, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(_filtersPath, updatedJson);
+            _logger.LogInformation("Removed filter '{Word}' from {FiltersPath}", word, _filtersPath);
         }
         catch (Exception ex) {
-            Console.WriteLine($"Error removing from appsettings.json: {ex.Message}");
+            _logger.LogError(ex, "Error removing from filters.json");
             throw;
         }
     }

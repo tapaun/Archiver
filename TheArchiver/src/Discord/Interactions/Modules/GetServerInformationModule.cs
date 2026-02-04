@@ -26,7 +26,6 @@ public class GetServerInformationModule : InteractionModuleBase<SocketInteractio
                    $"Owner ID: {guild.OwnerId}\n" +
                    $"Member Count: {usersCount}\n" +
                    $"Created At: {guild.CreatedAt.UtcDateTime}\n" +
-                   $"Region: {guild.VoiceRegionId}\n" +
                    $"Verification Level: {guild.VerificationLevel}\n" +
                    $"Boost Level: {guild.PremiumTier}\n" +
                    $"Boost Count: {guild.PremiumSubscriptionCount}");

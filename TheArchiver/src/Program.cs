@@ -1,8 +1,7 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using TheArchiver.Common.Options;
 using TheArchiver.Discord.Client;
 using TheArchiver.Discord.Handlers;
 using TheArchiver.Discord.Interactions;
@@ -18,19 +17,12 @@ namespace TheArchiver;
 public class Program {
     public static async Task Main(string[] args) {
         var builder = Host.CreateApplicationBuilder(args);
+        
+        // Add user secrets for development
+        if (builder.Environment.IsDevelopment()) {
+            builder.Configuration.AddUserSecrets<Program>();
+        }
 
-        // Configure options
-        builder.Services
-            .AddOptions<StartupOptions>()
-            .Bind(builder.Configuration.GetSection(StartupOptions.GetSectionName()))
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Token), "Startup:Token must be set")
-            .ValidateOnStart();
-
-        // Configure filter options
-        builder.Services
-            .AddOptions<FilterOptions>()
-            .Bind(builder.Configuration.GetSection(FilterOptions.GetSectionName()))
-            .ValidateOnStart();
         // Configure logging
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole();
@@ -60,8 +52,12 @@ public class Program {
         
         // Configure Discord client
         builder.Services.AddDiscordHost((config, services) => {
-            var startupOptions = services.GetRequiredService<IOptions<StartupOptions>>().Value;
-            config.Token = startupOptions.Token;
+            var token = builder.Configuration["BotToken"];
+            if (string.IsNullOrWhiteSpace(token)) {
+                throw new InvalidOperationException("BotToken must be set in user secrets. Run: dotnet user-secrets set \"BotToken\" \"your-token-here\"");
+            }
+            
+            config.Token = token;
             config.SocketConfig = new DiscordSocketConfig {
                 LogLevel = LogSeverity.Info,
                 GatewayIntents = GatewayIntents.Guilds |
@@ -78,8 +74,20 @@ public class Program {
             config.DefaultRunMode = RunMode.Async;
         });
 
-        // Build and run the host
+        // Build the host
         var host = builder.Build();
+        
+        // Initialize services that need to load data
+        var filterService = host.Services.GetRequiredService<KeywordMessageFilter>();
+        await filterService.LoadFiltersAsync();
+        
+        var categoryArchivingService = host.Services.GetRequiredService<CategoryArchivingService>();
+        await categoryArchivingService.LoadStateAsync();
+        
+        var channelArchivingService = host.Services.GetRequiredService<ChannelArchivingService>();
+        await channelArchivingService.LoadStateAsync();
+        
+        // Run the host
         await host.RunAsync();
     }
 }

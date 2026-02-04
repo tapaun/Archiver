@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Discord;
+using Microsoft.Extensions.Logging;
 
 namespace TheArchiver.Services.Archiving;
 
@@ -9,7 +10,24 @@ namespace TheArchiver.Services.Archiving;
 /// </summary>
 public class ChannelArchivingService {
     private readonly ConcurrentDictionary<ulong, ArchiveChannelInfo> _archiveChannels = new();
-    private readonly string _statePath = Path.Combine(AppContext.BaseDirectory, "archive_state.json");
+    private readonly ILogger<ChannelArchivingService> _logger;
+    private readonly string _statePath;
+
+    public ChannelArchivingService(ILogger<ChannelArchivingService> logger) {
+        _logger = logger;
+        
+        var baseDir = AppContext.BaseDirectory;
+        var projectPath = Path.Combine(baseDir, "..", "..", "..", "archive_state.json");
+        
+        if (File.Exists(Path.GetFullPath(projectPath)) || Directory.Exists(Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..")))) {
+            _statePath = Path.GetFullPath(projectPath);
+        } else {
+            _statePath = Path.Combine(baseDir, "archive_state.json");
+        }
+        
+        _logger.LogInformation("Using archive state path: {StatePath}", _statePath);
+    }
+
     /// <summary>
     /// Registers a channel for automatic archiving every 24 hours.
     /// </summary>
@@ -74,19 +92,25 @@ public class ChannelArchivingService {
     public async Task SaveStateAsync() {
         var json = JsonSerializer.Serialize(_archiveChannels, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(_statePath, json);
+        _logger.LogInformation("Saved archive state to {StatePath}", _statePath);
     }
     
     /// <summary>
     /// Loads the state and information of the archived channel
     /// </summary>
     public async Task LoadStateAsync() {
-        if (!File.Exists(_statePath)) return;
+        if (!File.Exists(_statePath)) {
+            _logger.LogInformation("Archive state file not found at {StatePath}, will create on first save", _statePath);
+            return;
+        }
+        
         var json = await File.ReadAllTextAsync(_statePath);
         var loaded = JsonSerializer.Deserialize<ConcurrentDictionary<ulong, ArchiveChannelInfo>>(json);
         if (loaded != null) {
             foreach (var kvp in loaded) {
                 _archiveChannels[kvp.Key] = kvp.Value;
             }
+            _logger.LogInformation("Loaded {Count} archive channels from {StatePath}", _archiveChannels.Count, _statePath);
         }
     }
     

@@ -12,9 +12,8 @@ public class RemoveFilterModule(Services.Filtering.KeywordMessageFilter filter)
     public async Task RemoveFilter(
         [global::Discord.Interactions.Summary("word", "The word to remove from filter")]
         string word) {
-        
         try {
-            filter.RemoveFilteredWord(word);
+            await filter.RemoveFilteredWordAsync(word);
             await RespondAsync($"✅ Removed filter: `{word}`", ephemeral: true);
         }
         catch (Exception ex) {
