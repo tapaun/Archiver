@@ -60,7 +60,8 @@ public class KeywordMessageFilter {
             };
             return sub + "[^a-zA-Z0-9]*";
         });
-        string pattern = @"\b" + string.Join("", letters) + @"\b";
+        // Use \b at start but allow word to continue (catches plurals, suffixes like -ed, -ing, etc.)
+        string pattern = @"\b" + string.Join("", letters);
         var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
         
         _patterns[regex] = replacement;
@@ -78,7 +79,7 @@ public class KeywordMessageFilter {
             var replaced = false;
 
             foreach(var kvp in _patterns.Where(kvp => kvp.Key.IsMatch(content))) {
-                content = kvp.Key.Replace(content, kvp.Value + ' ');
+                content = kvp.Key.Replace(content, kvp.Value);
                 replaced = true;
             }
 
