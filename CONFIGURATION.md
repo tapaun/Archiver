@@ -2,22 +2,54 @@
 
 ## Bot Token Setup
 
-The bot token is now stored in **user secrets** for security. To set it up:
+The bot token is stored in **user secrets** for security:
 
 ```bash
+cd TheArchiver
 dotnet user-secrets set "BotToken" "your-discord-bot-token-here"
 ```
 
-Run this command from the `TheArchiver` project directory.
+User secrets are automatically loaded in Development environment (set via `Properties/launchSettings.json`).
+
+## File Path Configuration
+
+File paths are configured via `appsettings.json` using the Options pattern:
+
+```json
+{
+  "FilePaths": {
+    "FiltersPath": "filters.json",
+    "ArchivingPath": "archiving.json",
+    "ArchiveStatePath": "archive_state.json"
+  }
+}
+```
+
+### Default Behavior
+- Paths are relative to the application's base directory (output folder)
+- Files are automatically copied to output during build
+- Absolute paths are also supported
+
+### Overriding Paths
+
+You can override paths via (in order of precedence):
+
+1. **Environment variables**:
+   ```bash
+   export FilePaths__FiltersPath="/custom/path/filters.json"
+   ```
+
+2. **User secrets**:
+   ```bash
+   dotnet user-secrets set "FilePaths:FiltersPath" "/custom/path/filters.json"
+   ```
+
+3. **appsettings.json** (defaults)
 
 ## Configuration Files
 
-The application uses two JSON configuration files:
-
 ### 1. `filters.json`
-Located at: `TheArchiver/filters.json`
-
-This file contains word filters and their replacements. Format:
+Contains word filters and their replacements:
 ```json
 {
   "badword": "replacement",
@@ -25,20 +57,15 @@ This file contains word filters and their replacements. Format:
 }
 ```
 
-You can add/remove filters at runtime using the Discord slash commands:
-- `/add-filter` - Add a new filter (Admin only)
-- `/remove-filter` - Remove an existing filter (Admin only)
+Manage at runtime via Discord commands:
+- `/add-filter` - Add a new filter
+- `/remove-filter` - Remove an existing filter
 
 ### 2. `archiving.json`
-Located at: `TheArchiver/archiving.json`
-
-This file stores server archiving configurations. It's automatically managed by the bot when you use archiving commands:
-- `/set-archive-category` - Configure the category for archived channels
-
-Format:
+Stores server archiving configurations (auto-managed):
 ```json
 {
-  "servers": {
+  "Servers": {
     "123456789": {
       "ArchiveCategoryId": 987654321
     }
@@ -46,15 +73,36 @@ Format:
 }
 ```
 
-### 3. `archive_state.json` (auto-generated)
-This file is automatically created and managed by the bot to track channel archiving state.
+Managed via `/set-archive-category` command.
 
-## Migration from appsettings.json
+### 3. `archive_state.json`
+Tracks channel archiving state (auto-generated and managed by the bot).
 
-The old `appsettings.json` file has been removed. Configuration is now split into:
-- **Bot Token**: User secrets (secure)
-- **Filters**: `filters.json` (persistent, editable)
-- **Archiving**: `archiving.json` (auto-managed)
+## Architecture
 
-This separation improves security and makes the configuration more modular and maintainable.
+The configuration uses the standard .NET Options pattern:
 
+```csharp
+// FilePathOptions.cs
+public class FilePathOptions {
+    public const string SectionName = "FilePaths";
+    public string FiltersPath { get; set; } = "filters.json";
+    public string ArchivingPath { get; set; } = "archiving.json";
+    public string ArchiveStatePath { get; set; } = "archive_state.json";
+}
+
+// Program.cs
+builder.Services.Configure<FilePathOptions>(
+    builder.Configuration.GetSection(FilePathOptions.SectionName));
+
+// Service injection
+public MyService(IOptions<FilePathOptions> options) {
+    var path = FilePathOptions.ResolvePath(options.Value.FiltersPath);
+}
+```
+
+This provides:
+- ✅ Type-safe configuration
+- ✅ Default values in code as fallback
+- ✅ Source-controlled defaults in `appsettings.json`
+- ✅ Override capability via user secrets/environment variables

@@ -10,7 +10,7 @@ A Discord bot for archiving messages and filtering inappropriate content.
 - **Category Management**: Configure archive categories per server
 - **Server Information**: Get detailed server and user information
 
-## Setup
+## Quick Start
 
 ### Prerequisites
 - .NET 10.0 SDK
@@ -18,53 +18,38 @@ A Discord bot for archiving messages and filtering inappropriate content.
 
 ### Installation
 
-1. Clone the repository
+1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd TheArchiver
+cd TheArchiver/TheArchiver
 ```
 
-2. Set up your bot token using user secrets (secure):
+2. Set up your bot token using user secrets:
 ```bash
-cd TheArchiver
 dotnet user-secrets set "BotToken" "YOUR_DISCORD_BOT_TOKEN_HERE"
 ```
 
-3. (Optional) Customize filters by editing `TheArchiver/filters.json`:
-```json
-{
-  "badword": "replacement",
-  "anotherbadword": "substitute"
-}
-```
-
-4. Build and run:
+3. Run the bot:
 ```bash
-dotnet build
 dotnet run
 ```
 
+That's it! The bot will automatically use the default configuration from `appsettings.json`.
+
 ## Configuration
 
-### Bot Token (Secure)
-The bot token is stored in **user secrets** (not in files). Set it using:
+See [CONFIGURATION.md](CONFIGURATION.md) for detailed configuration options.
+
+### Bot Token (Required)
 ```bash
 dotnet user-secrets set "BotToken" "YOUR_TOKEN"
 ```
 
-### Filter Words
-Edit `TheArchiver/filters.json` to add/remove filter words:
-```json
-{
-  "word1": "replacement1",
-  "word2": "replacement2"
-}
-```
-
-Filters can also be managed at runtime using slash commands (see below).
-
-### Archiving Configuration
-The bot automatically manages `archiving.json` to store server archiving configurations. No manual editing needed.
+### File Paths (Optional)
+File paths are configured in `appsettings.json` with sensible defaults. You can override them via:
+- `appsettings.json` (source-controlled defaults)
+- User secrets (`dotnet user-secrets set "FilePaths:FiltersPath" "/custom/path"`)
+- Environment variables (`FilePaths__FiltersPath=/custom/path`)
 
 ## Slash Commands
 
@@ -74,7 +59,7 @@ The bot automatically manages `archiving.json` to store server archiving configu
 
 ### Archiving Management
 - `/set-archive-category` - Configure the category where archived channels are moved
-- `/set-archive-channel` - Set up a channel for automatic archiving
+- `/set-archiving-channel` - Set up a channel for automatic 24-hour archiving
 
 ### Information
 - `/get-server-info` - Get detailed information about the server
@@ -85,37 +70,37 @@ The bot automatically manages `archiving.json` to store server archiving configu
 
 ```
 TheArchiver/
+├── TheArchiver.csproj        # Project file with global usings
+├── Program.cs                # Application entry point
+├── appsettings.json          # Default configuration (file paths)
 ├── filters.json              # Word filters and replacements
-├── archiving.json           # Server archiving configurations (auto-managed)
-├── archive_state.json       # Channel archiving state (auto-managed)
-├── src/
-│   ├── Program.cs           # Application entry point
-│   ├── Discord/             # Discord client and handlers
-│   ├── Services/            # Business logic services
-│   └── ...
-└── TheArchiver.csproj
+├── archiving.json            # Server archiving configurations (auto-managed)
+├── Configuration/
+│   └── FilePathOptions.cs    # Configuration options class
+├── Discord/
+│   ├── Client/               # Discord client services
+│   ├── Handlers/             # Message handlers
+│   └── Interactions/         # Slash command modules
+├── Services/
+│   ├── Archiving/            # Channel/category archiving
+│   ├── Embedding/            # Embed builders
+│   ├── Filtering/            # Keyword filtering
+│   └── Information/          # Server/user info services
+└── Properties/
+    └── launchSettings.json   # Development environment settings
 ```
 
 ## Development
 
 The bot uses:
-- **Discord.Net** for Discord API interactions
-- **Microsoft.Extensions.Hosting** for service management
-- **User Secrets** for secure configuration
-- **Structured logging** with ILogger
+- **Discord.NET** - Discord API wrapper
+- **Discord.Addons.Hosting** - Hosted service integration
+- **Microsoft.Extensions.Hosting** - Generic host for DI and configuration
+- **IOptions pattern** - Type-safe configuration via `IOptions<FilePathOptions>`
 
-## Security Notes
-
-- ✅ Bot token is stored in **user secrets** (not in files)
-- ✅ `filters.json` is tracked in git (customize as needed)
-- ✅ `archiving.json` and `archive_state.json` are auto-generated
-- ⚠️ Never commit sensitive tokens or credentials to version control
-
-## Documentation
-
-- [CONFIGURATION.md](CONFIGURATION.md) - Detailed configuration guide
-- [SETUP.md](SETUP.md) - Quick setup instructions
+### Environment
+The `launchSettings.json` automatically sets `DOTNET_ENVIRONMENT=Development` when running with `dotnet run`, enabling user secrets.
 
 ## License
 
-[Add your license here]
+MIT
