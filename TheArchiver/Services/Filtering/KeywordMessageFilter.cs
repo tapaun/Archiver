@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TheArchiver.Configuration;
 using TheArchiver.Services.Embedding;
 
 namespace TheArchiver.Services.Filtering;
@@ -15,19 +17,13 @@ public class KeywordMessageFilter {
     private readonly Dictionary<Regex, string> _patterns = [];
     private readonly Dictionary<string, Regex> _wordToPattern = [];
 
-    public KeywordMessageFilter(UserEmbedBuilder embedBuilder, ILogger<KeywordMessageFilter> logger) {
+    public KeywordMessageFilter(
+        UserEmbedBuilder embedBuilder, 
+        ILogger<KeywordMessageFilter> logger,
+        IOptions<FilePathOptions> options) {
         _embedBuilder = embedBuilder;
         _logger = logger;
-        
-        var baseDir = AppContext.BaseDirectory;
-        var projectPath = Path.Combine(baseDir, "..", "..", "..", "filters.json");
-        
-        if (File.Exists(Path.GetFullPath(projectPath))) {
-            _filtersPath = Path.GetFullPath(projectPath);
-        } else {
-            _filtersPath = Path.Combine(baseDir, "filters.json");
-        }
-        
+        _filtersPath = FilePathOptions.ResolvePath(options.Value.FiltersPath);
         _logger.LogInformation("Using filters path: {FiltersPath}", _filtersPath);
     }
 

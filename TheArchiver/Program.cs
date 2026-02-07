@@ -2,10 +2,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using TheArchiver.Configuration;
 using TheArchiver.Discord.Client;
 using TheArchiver.Discord.Handlers;
 using TheArchiver.Discord.Interactions;
-using TheArchiver.Discord.Interactions.Modules;
 using TheArchiver.Services.Archiving;
 using TheArchiver.Services.Embedding;
 using TheArchiver.Services.Filtering;
@@ -18,6 +18,11 @@ public class Program {
     public static async Task Main(string[] args) {
         var builder = Host.CreateApplicationBuilder(args);
         
+        // Add JSON configuration
+        builder.Configuration
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+        
         // Add user secrets for development
         if (builder.Environment.IsDevelopment()) {
             builder.Configuration.AddUserSecrets<Program>();
@@ -28,30 +33,27 @@ public class Program {
         builder.Logging.AddConsole();
         builder.Logging.SetMinimumLevel(LogLevel.Information);
 
+        // Configure file path options from configuration
+        builder.Services.Configure<FilePathOptions>(
+            builder.Configuration.GetSection(FilePathOptions.SectionName));
+
         // Register services
         builder.Services.AddSingleton<UserEmbedBuilder>();
         builder.Services.AddSingleton<KeywordMessageFilter>();
         builder.Services.AddSingleton<MessageHandler>();
         
-        // Register archiving services and interaction modules
+        // Register archiving services
         builder.Services.AddSingleton<DiscordInformationService>();
         builder.Services.AddSingleton<ChannelArchivingService>();
         builder.Services.AddSingleton<CategoryArchivingService>();
-        builder.Services.AddSingleton<SetArchivingCategoryModule>();
-        builder.Services.AddSingleton<SetArchivingChannelModule>();
-        builder.Services.AddSingleton<GetServerInformationModule>();
-        builder.Services.AddSingleton<GetUserInformationModule>();
-        builder.Services.AddSingleton<PurgeModule>();
-        builder.Services.AddSingleton<AddFilterModule>();
-        builder.Services.AddSingleton<RemoveFilterModule>();
         
-        // Register  hosted services    
+        // Register hosted services    
         builder.Services.AddHostedService<MessageListenerService>();
         builder.Services.AddHostedService<SlashCommandHandlerService>();
         builder.Services.AddHostedService<ArchiveTimerService>();
         
         // Configure Discord client
-        builder.Services.AddDiscordHost((config, services) => {
+        builder.Services.AddDiscordHost((config, _) => {
             var token = builder.Configuration["BotToken"];
             if (string.IsNullOrWhiteSpace(token)) {
                 throw new InvalidOperationException("BotToken must be set in user secrets. Run: dotnet user-secrets set \"BotToken\" \"your-token-here\"");

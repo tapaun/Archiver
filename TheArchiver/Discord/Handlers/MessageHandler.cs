@@ -16,21 +16,7 @@ public class MessageHandler(KeywordMessageFilter filter, ILogger<MessageHandler>
     public async Task<Embed?> OnMessageReceivedAsync(SocketMessage rawMessage) {
         try {
             var embed = await _filter.ContainsKeywordAsync(rawMessage);
-            if(embed != null) {
-                await rawMessage.Channel.SendMessageAsync(embed: embed);
-                try {
-                    await rawMessage.DeleteAsync();
-                } catch(HttpException ex) when (ex.DiscordCode == DiscordErrorCode.UnknownMessage) {
-                    // Message was already deleted; not an error worth logging at Error level.
-                    _logger.LogDebug("Message already deleted in channel {Channel} for user {User}", 
-                        rawMessage.Channel.Name, rawMessage.Author.Username);
-                } catch(HttpException ex) when (ex.DiscordCode == DiscordErrorCode.MissingPermissions) {
-                    _logger.LogWarning("Missing permissions to delete messages in channel {Channel}", 
-                        rawMessage.Channel.Name);
-                }
-                _logger.LogInformation("Filtered message sent for {User}", rawMessage.Author.Username);
-            }
-            return embed;
+            return await SendEmbedAsync(embed, rawMessage);
         } catch(HttpException ex) when(ex.DiscordCode == DiscordErrorCode.MissingPermissions) {
             _logger.LogWarning("Missing permissions in channel {Channel}", rawMessage.Channel.Name);
             return null;
@@ -71,4 +57,21 @@ public class MessageHandler(KeywordMessageFilter filter, ILogger<MessageHandler>
         }
     }
 
+    private async Task<Embed?> SendEmbedAsync(Embed? embed, IMessage rawMessage) {
+        if(embed != null) {
+            await rawMessage.Channel.SendMessageAsync(embed: embed);
+            try {
+                await rawMessage.DeleteAsync();
+            } catch(HttpException ex) when (ex.DiscordCode == DiscordErrorCode.UnknownMessage) {
+                // Message was already deleted; not an error worth logging at Error level.
+                _logger.LogDebug("Message already deleted in channel {Channel} for user {User}", 
+                    rawMessage.Channel.Name, rawMessage.Author.Username);
+            } catch(HttpException ex) when (ex.DiscordCode == DiscordErrorCode.MissingPermissions) {
+                _logger.LogWarning("Missing permissions to delete messages in channel {Channel}", 
+                    rawMessage.Channel.Name);
+            }
+            _logger.LogInformation("Filtered message sent for {User}", rawMessage.Author.Username);
+        }
+        return embed;
+    }
 }

@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TheArchiver.Configuration;
 
 namespace TheArchiver.Services.Archiving;
 
@@ -12,18 +14,11 @@ public class CategoryArchivingService {
     private readonly ILogger<CategoryArchivingService> _logger;
     private readonly string _archivingPath;
 
-    public CategoryArchivingService(ILogger<CategoryArchivingService> logger) {
+    public CategoryArchivingService(
+        ILogger<CategoryArchivingService> logger,
+        IOptions<FilePathOptions> options) {
         _logger = logger;
-        
-        var baseDir = AppContext.BaseDirectory;
-        var projectPath = Path.Combine(baseDir, "..", "..", "..", "archiving.json");
-        
-        if (File.Exists(Path.GetFullPath(projectPath))) {
-            _archivingPath = Path.GetFullPath(projectPath);
-        } else {
-            _archivingPath = Path.Combine(baseDir, "archiving.json");
-        }
-        
+        _archivingPath = FilePathOptions.ResolvePath(options.Value.ArchivingPath);
         _logger.LogInformation("Using archiving path: {ArchivingPath}", _archivingPath);
     }
     

@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Discord;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using TheArchiver.Configuration;
 
 namespace TheArchiver.Services.Archiving;
 
@@ -13,18 +15,11 @@ public class ChannelArchivingService {
     private readonly ILogger<ChannelArchivingService> _logger;
     private readonly string _statePath;
 
-    public ChannelArchivingService(ILogger<ChannelArchivingService> logger) {
+    public ChannelArchivingService(
+        ILogger<ChannelArchivingService> logger,
+        IOptions<FilePathOptions> options) {
         _logger = logger;
-        
-        var baseDir = AppContext.BaseDirectory;
-        var projectPath = Path.Combine(baseDir, "..", "..", "..", "archive_state.json");
-        
-        if (File.Exists(Path.GetFullPath(projectPath)) || Directory.Exists(Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..")))) {
-            _statePath = Path.GetFullPath(projectPath);
-        } else {
-            _statePath = Path.Combine(baseDir, "archive_state.json");
-        }
-        
+        _statePath = FilePathOptions.ResolvePath(options.Value.ArchiveStatePath);
         _logger.LogInformation("Using archive state path: {StatePath}", _statePath);
     }
 
